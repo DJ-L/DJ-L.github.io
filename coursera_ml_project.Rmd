@@ -1,0 +1,112 @@
+---
+title: "Prediction of Personal Activities Manners"
+author: "Daniel Lindqvist"
+date: "January 14, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+Today, a large amount of data about personal activity may be collected relatively easy, using devices such as Fitbit, Nike FuelBand and jawbone Up. In this project, data was 
+analyzed with the purpose to discriminate between correct and various incorrect
+barbell lifts, from six participants. They were asked to perform the lifts correctly and
+incorrectly in five different ways. The correct and incorrect manners were all well
+defined and objective. This project will use two machine learning algorithms for prediction of these lifting manners, random forest and support vector machines. The results are strikingly accurate for both models.
+
+## Data Cleaning and Preprocessing
+
+### Missing observations
+
+The data contains 160 variables, and a first summary shows that a great part of them 
+are not useful for the purpose of this project, as they are missing in almost all observations. It was noted the variables either contained almost only missings, or
+they did not contain any missings at all. As a first obvious step was to only keep
+the 53 non-missing variables.
+
+```{r,message=FALSE,warning=FALSE,eval=TRUE}
+library(doParallel)
+library(caret)
+library(data.table)
+setwd("C:\\Users\\Daniel\\Documents\\Coursera")
+df00<-read.table("pml-training.csv",header = TRUE,sep=",")
+#summary(df00)
+```
+
+Based on the summary only the non-missing variables were kept. The resulting data set
+had 53 variables:
+
+```{r,message=FALSE,warning=FALSE,eval=TRUE}
+u1=c("new_window","num_window","roll_belt","pitch_belt")
+u2=c("gyros_belt_x","gyros_belt_y","gyros_belt_z") 
+u3=c("accel_belt_x","accel_belt_y","accel_belt_z","magnet_belt_x","magnet_belt_y")
+u4=c("magnet_belt_z","roll_arm","pitch_arm","yaw_arm","total_accel_arm")
+u5=c("gyros_arm_x","gyros_arm_y","gyros_arm_z")
+u6=c("accel_arm_x","accel_arm_y","accel_arm_z","magnet_arm_x","magnet_arm_y")
+u7=c("magnet_arm_z","roll_dumbbell","pitch_dumbbell","yaw_dumbbell","total_accel_dumbbell")
+u8=c("gyros_dumbbell_x","gyros_dumbbell_y","gyros_dumbbell_z","accel_dumbbell_x","accel_dumbbell_y","accel_dumbbell_z")
+u9=c("magnet_dumbbell_x","magnet_dumbbell_y","magnet_dumbbell_z","roll_forearm","pitch_forearm")
+u10=c("yaw_forearm","total_accel_forearm","gyros_forearm_x","gyros_forearm_y")
+u11=c("gyros_forearm_z","accel_forearm_x","accel_forearm_y","accel_forearm_z","magnet_forearm_x")
+u12=c("magnet_forearm_y","magnet_forearm_z","classe")
+u13=c("user_name")
+df01<-df00[,c(u1,u2,u3,u4,u5,u6,u7,u8,u9,u10,u11,u12)]
+df01_2<-df00[,c(u1,u2,u3,u4,u5,u6,u7,u8,u9,u10,u11,u12,u13)]
+
+
+```
+
+### Variable selections based on variability and median discrimination
+
+It was decided that the models to be chosen where to be run on the full set of non-missing variables as well as on a reduced set of variables as comparison. At an early stage it was found that random forest (se below) was performing extremely well on the full set and also in a reasonable time (even though a couple of hours), but for the purpose of exploration and gaining experience in the field, the original plan was kept, i.e., to performed the learning on reduced data sets and compare various machine learning methods.
+To make a further selection, the variability and the apparent discriminating 
+properties on a one-by-one basis was investigated in 53 scatter plots (one blot for each
+variable) and 53 box plots respectively on the training set. Two of each are presented here as examples.
+
+```{r,message=FALSE,warning=FALSE,eval=TRUE,fig.width=2, fig.height=2}
+inTrain<-createDataPartition(df01_2$classe,p=3/4)[[1]]
+training<-df01_2[inTrain,]
+testing<-df01_2[-inTrain,]
+dfUser<-training[training$user_name=="pedro",]
+name_vect<-names(dfUser)
+
+for(i in 4:5){
+  name<-name_vect[i]
+  p00<-ggplot(dfUser,aes_string("classe",name))+geom_point()
+  plot(p00)
+}
+
+for(i in 6:7){
+  name<-name_vect[i]
+  p00<-ggplot(dfUser,aes_string("classe",name))+geom_boxplot()
+  plot(p00)
+}
+
+```
+
+### Models and cross validation
+
+Since random forest is well known for its effectiveness, it was chosen first, but also 
+support vector machines was chosen to be compared with random forest in this application. (If the result hadn't turned out so well, more methods would obviously have been tested.) Ordinary regression didn't seem as an obvious choise for this data.
+To estimate out of sample error, cross validation was performed with k=10, considered as an default starting point suitable for the data size:
+
+```{r,message=FALSE,warning=FALSE,eval=FALSE,fig.width=2, fig.height=2}
+#define training control
+Grid <- expand.grid(mtry = 52)
+train_control <- trainControl(method="cv", number=10)
+# train the model
+model <- train(classe~., data=df01, trControl=train_control, method="rf",tuneGrid=Grid)
+# summarize results
+print(model)
+model <- train(classe~., data=df01, trControl=train_control, method="svmPoly")
+# summarize results
+print(model)
+```
+
+### Results and Summary
+
+Running random forest with cross validation with tuning parameter constant at mtry = 52 and k=10 gained the result: accuracy = 0.9952  and kappa = 0.9939, that is, the out of sample error would expectedly be about 1-accuracy ~ 0.5%.
+Running support vector machines with cross validation with degree = 3, scale = 0.1, C = 1
+gained the result: accuracy = 0.995, kappa=0.994, that is the same as random forest. Interestingly, this outcome from the SVD differentiated largely dependent on the parameters degree, scale and C, and the result stated above was the best.
